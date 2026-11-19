@@ -3,6 +3,8 @@ import { formatDate, formatPrice, useAdmin } from '../context/AdminContext'
 
 const today = new Date().toISOString().slice(0, 10)
 
+const GAMES = ['MW19', 'CW', 'MW2', 'MW3', 'Bo6', 'Bo7', 'MW4', 'GTA VI']
+
 const initialForm = {
   title: '',
   game: 'MW3',
@@ -222,11 +224,8 @@ export default function Products() {
           <label className="field">
             <span>Game</span>
             <select value={form.game} onChange={update('game')}>
-              <option>MW3</option>
-              <option>BO2</option>
-              <option>MW2</option>
-              <option>Destiny</option>
-              <option>Other</option>
+              {GAMES.map((game) => <option key={game}>{game}</option>)}
+              {!GAMES.includes(form.game) && <option>{form.game}</option>}
             </select>
           </label>
 
