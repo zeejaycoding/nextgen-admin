@@ -50,8 +50,20 @@ export function AdminProvider({ children }) {
 
     const addProduct = (product) => {
       const nextId = products.reduce((max, item) => Math.max(max, item.id), 0) + 1
+      const slug = product.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
       setProducts((current) => [
-        { ...product, id: nextId, published: product.published || new Date().toISOString().slice(0, 10) },
+        {
+          ...product,
+          id: nextId,
+          slug: `${nextId}-${slug}`,
+          images: product.images || [],
+          features: product.features || [],
+          video: product.video || '',
+          published: product.published || new Date().toISOString().slice(0, 10),
+        },
         ...current,
       ])
     }

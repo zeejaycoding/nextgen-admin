@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatDate, formatPrice, useAdmin } from '../context/AdminContext'
+
+const today = new Date().toISOString().slice(0, 10)
 
 const initialForm = {
   title: '',
@@ -8,8 +10,48 @@ const initialForm = {
   price: '',
   badge: '',
   contact: '',
-  published: new Date().toISOString().slice(0, 10),
+  published: today,
+  version: '',
+  image: '',
+  images: [],
+  video: '',
+  features: '',
   description: '',
+}
+
+const toLines = (value) => value.split('\n').map((line) => line.trim()).filter(Boolean)
+
+/** Resize an attached image so it fits comfortably in localStorage. */
+function attachImage(file, maxSize = 1000, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('read failed'))
+    reader.onload = () => {
+      const img = new Image()
+      img.onerror = () => reject(new Error('decode failed'))
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height))
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        const ctx = canvas.getContext('2d')
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.src = reader.result
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+function Paperclip() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M16.5 6.5v9a4.5 4.5 0 0 1-9 0V6a3 3 0 0 1 6 0v9a1.5 1.5 0 0 1-3 0V7h1.5v8a1.5 1.5 0 0 0 3 0V6a3 3 0 0 0-6 0v9.5a4.5 4.5 0 0 0 9 0v-9h1.5Z" />
+    </svg>
+  )
 }
 
 export default function Products() {
@@ -18,12 +60,64 @@ export default function Products() {
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
   const [query, setQuery] = useState('')
+  const [viewer, setViewer] = useState(null)
+  const mainInput = useRef(null)
+  const shotsInput = useRef(null)
+
+  useEffect(() => {
+    if (!viewer) return undefined
+    const onKey = (event) => {
+      if (event.key === 'Escape') setViewer(null)
+      if (event.key === 'ArrowRight') setViewer((current) => ({ ...current, index: (current.index + 1) % current.images.length }))
+      if (event.key === 'ArrowLeft') setViewer((current) => ({ ...current, index: (current.index - 1 + current.images.length) % current.images.length }))
+    }
+    document.addEventListener('keydown', onKey)
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previous
+    }
+  }, [viewer])
 
   const update = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
     setError('')
     setSaved('')
   }
+
+  const handleMain = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    try {
+      const dataUrl = await attachImage(file)
+      setForm((current) => ({ ...current, image: dataUrl }))
+      setError('')
+      setSaved('')
+    } catch {
+      setError('Could not read that image. Try another file.')
+    }
+  }
+
+  const handleShots = async (event) => {
+    const files = Array.from(event.target.files || [])
+    event.target.value = ''
+    if (!files.length) return
+    try {
+      const images = await Promise.all(files.map((file) => attachImage(file)))
+      setForm((current) => ({ ...current, images: [...current.images, ...images] }))
+      setError('')
+      setSaved('')
+    } catch {
+      setError('Could not read one of those images.')
+    }
+  }
+
+  const removeShot = (index) => setForm((current) => ({
+    ...current,
+    images: current.images.filter((_, i) => i !== index),
+  }))
 
   const handleSubmit = (event) => {
     event.preventDefault()
@@ -39,7 +133,12 @@ export default function Products() {
       badge: form.badge,
       contact: form.contact.trim() || 'NextGen Team',
       published: form.published,
+      version: form.version.trim() || '1.0',
       description: form.description.trim(),
+      image: form.image,
+      images: form.images,
+      video: form.video.trim(),
+      features: toLines(form.features),
     })
 
     setForm(initialForm)
@@ -51,6 +150,11 @@ export default function Products() {
     const term = query.trim().toLowerCase()
     return !term || `${product.title} ${product.game} ${product.category}`.toLowerCase().includes(term)
   })
+
+  const openViewer = (product) => {
+    const images = [...new Set([product.image, ...(product.images || [])].filter(Boolean))]
+    if (images.length) setViewer({ images, index: 0, title: product.title })
+  }
 
   return (
     <div className="page-stack">
@@ -96,6 +200,11 @@ export default function Products() {
           </label>
 
           <label className="field">
+            <span>Version</span>
+            <input type="text" value={form.version} onChange={update('version')} placeholder="e.g. 2.22" />
+          </label>
+
+          <label className="field">
             <span>Badge</span>
             <select value={form.badge} onChange={update('badge')}>
               <option value="">None</option>
@@ -115,9 +224,58 @@ export default function Products() {
             <input type="text" value={form.contact} onChange={update('contact')} placeholder="NextGen Team" />
           </label>
 
+          <div className="field field--wide">
+            <span>Main image</span>
+            <div className="attach-row">
+              <input ref={mainInput} type="file" accept="image/*" onChange={handleMain} className="hidden-file" aria-label="Attach main image" />
+              <button type="button" className="btn btn-ghost btn-sm attach-btn" onClick={() => mainInput.current?.click()}>
+                <Paperclip /> {form.image ? 'Change image' : 'Attach image'}
+              </button>
+              {form.image && <img className="attach-preview" src={form.image} alt="Main image preview" />}
+              {form.image && (
+                <button type="button" className="attach-remove" onClick={() => setForm((c) => ({ ...c, image: '' }))} aria-label="Remove main image">×</button>
+              )}
+            </div>
+            <span className="field-hint">Opens your file explorer. The big image on the product page.</span>
+          </div>
+
+          <div className="field field--wide">
+            <span>Extra screenshots</span>
+            <div className="attach-row">
+              <input ref={shotsInput} type="file" accept="image/*" multiple onChange={handleShots} className="hidden-file" aria-label="Attach screenshots" />
+              <button type="button" className="btn btn-ghost btn-sm attach-btn" onClick={() => shotsInput.current?.click()}>
+                <Paperclip /> Add screenshots
+              </button>
+              <span className="attach-count">{form.images.length} attached</span>
+            </div>
+            {form.images.length > 0 && (
+              <div className="attach-thumbs">
+                {form.images.map((src, index) => (
+                  <div className="attach-thumb" key={index}>
+                    <img src={src} alt={`Screenshot ${index + 1}`} />
+                    <button type="button" onClick={() => removeShot(index)} aria-label={`Remove screenshot ${index + 1}`}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <span className="field-hint">Attach several images at once. They appear in the gallery.</span>
+          </div>
+
+          <label className="field field--wide">
+            <span>YouTube video link</span>
+            <input type="text" value={form.video} onChange={update('video')} placeholder="https://www.youtube.com/watch?v=…" />
+            <span className="field-hint">Optional. Embedded on the product page.</span>
+          </label>
+
           <label className="field field--wide">
             <span>Description</span>
             <textarea rows="3" value={form.description} onChange={update('description')} placeholder="What does this product do?" />
+          </label>
+
+          <label className="field field--wide">
+            <span>Features</span>
+            <textarea rows="2" value={form.features} onChange={update('features')} placeholder="One feature per line" />
+            <span className="field-hint">Optional. Displayed as a checklist.</span>
           </label>
 
           <div className="form-actions field--wide">
@@ -150,6 +308,7 @@ export default function Products() {
           <table className="data-table">
             <thead>
               <tr>
+                <th>Media</th>
                 <th>Product</th>
                 <th>Game</th>
                 <th>Category</th>
@@ -160,28 +319,75 @@ export default function Products() {
               </tr>
             </thead>
             <tbody>
-              {visible.map((product) => (
-                <tr key={product.id}>
-                  <td><strong>{product.title}</strong></td>
-                  <td>{product.game}</td>
-                  <td>{product.category}</td>
-                  <td>{formatPrice(product.price)}</td>
-                  <td>{product.badge ? <span className="tag">{product.badge}</span> : <span className="muted">—</span>}</td>
-                  <td>{formatDate(product.published)}</td>
-                  <td>
-                    <button type="button" className="row-action row-action--danger" onClick={() => removeProduct(product.id)}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {visible.map((product) => {
+                const cover = product.image || product.images?.[0]
+                return (
+                  <tr key={product.id}>
+                    <td>
+                      <div className="cell-media">
+                        {cover ? (
+                          <button
+                            type="button"
+                            className="cell-media-button"
+                            onClick={() => openViewer(product)}
+                            aria-label={`Open images for ${product.title}`}
+                          >
+                            <img className="cell-thumb" src={cover} alt="" />
+                          </button>
+                        ) : <span className="muted">—</span>}
+                        {product.video && <span className="video-dot" title="Has video">▶</span>}
+                      </div>
+                    </td>
+                    <td><strong>{product.title}</strong></td>
+                    <td>{product.game}</td>
+                    <td>{product.category}</td>
+                    <td>{formatPrice(product.price)}</td>
+                    <td>{product.badge ? <span className="tag">{product.badge}</span> : <span className="muted">—</span>}</td>
+                    <td>{formatDate(product.published)}</td>
+                    <td>
+                      <button type="button" className="row-action row-action--danger" onClick={() => removeProduct(product.id)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
               {visible.length === 0 && (
-                <tr><td colSpan="7" className="empty-row">No products match your search.</td></tr>
+                <tr><td colSpan="8" className="empty-row">No products match your search.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {viewer && (
+        <div className="admin-lightbox" role="dialog" aria-modal="true" aria-label={`${viewer.title} images`} onClick={() => setViewer(null)}>
+          <button type="button" className="admin-lightbox-close" onClick={() => setViewer(null)} aria-label="Close image">×</button>
+          {viewer.images.length > 1 && (
+            <button
+              type="button"
+              className="admin-lightbox-nav admin-lightbox-nav--prev"
+              onClick={(event) => { event.stopPropagation(); setViewer((current) => ({ ...current, index: (current.index - 1 + current.images.length) % current.images.length })) }}
+              aria-label="Previous image"
+            >‹</button>
+          )}
+          <img
+            className="admin-lightbox-image"
+            src={viewer.images[viewer.index]}
+            alt={viewer.title}
+            onClick={(event) => event.stopPropagation()}
+          />
+          {viewer.images.length > 1 && (
+            <button
+              type="button"
+              className="admin-lightbox-nav admin-lightbox-nav--next"
+              onClick={(event) => { event.stopPropagation(); setViewer((current) => ({ ...current, index: (current.index + 1) % current.images.length })) }}
+              aria-label="Next image"
+            >›</button>
+          )}
+          <span className="admin-lightbox-caption">{viewer.title} · {viewer.index + 1}/{viewer.images.length}</span>
+        </div>
+      )}
     </div>
   )
 }
