@@ -55,8 +55,9 @@ function Paperclip() {
 }
 
 export default function Products() {
-  const { products, addProduct, removeProduct } = useAdmin()
+  const { products, addProduct, updateProduct, removeProduct } = useAdmin()
   const [form, setForm] = useState(initialForm)
+  const [editingId, setEditingId] = useState(null)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
   const [query, setQuery] = useState('')
@@ -119,13 +120,47 @@ export default function Products() {
     images: current.images.filter((_, i) => i !== index),
   }))
 
+  const resetForm = () => {
+    setEditingId(null)
+    setForm(initialForm)
+    setError('')
+    setSaved('')
+  }
+
+  const handleDelete = (id) => {
+    if (editingId === id) resetForm()
+    removeProduct(id)
+  }
+
+  const startEdit = (product) => {
+    setEditingId(product.id)
+    setForm({
+      title: product.title || '',
+      game: product.game || 'MW3',
+      category: product.category || 'Mod',
+      price: product.price ?? '',
+      badge: product.badge || '',
+      contact: product.contact || '',
+      published: product.published || today,
+      version: product.version || '',
+      image: product.image || '',
+      images: [...(product.images || [])],
+      video: product.video || '',
+      features: (product.features || []).join('\n'),
+      description: product.description || '',
+    })
+    setError('')
+    setSaved('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const handleSubmit = (event) => {
     event.preventDefault()
 
     if (form.title.trim().length < 3) return setError('Product title needs at least 3 characters.')
     if (form.price === '' || Number(form.price) < 0) return setError('Enter a valid price (0 for free).')
 
-    addProduct({
+    const payload = {
       title: form.title.trim(),
       game: form.game,
       category: form.category,
@@ -139,11 +174,19 @@ export default function Products() {
       images: form.images,
       video: form.video.trim(),
       features: toLines(form.features),
-    })
+    }
 
+    const wasEditing = editingId !== null
+    if (wasEditing) {
+      updateProduct(editingId, payload)
+    } else {
+      addProduct(payload)
+    }
+
+    setEditingId(null)
     setForm(initialForm)
     setError('')
-    setSaved(`"${form.title.trim()}" was added.`)
+    setSaved(`"${payload.title}" was ${wasEditing ? 'updated' : 'added'}.`)
   }
 
   const visible = products.filter((product) => {
@@ -161,8 +204,12 @@ export default function Products() {
       <div className="panel">
         <div className="panel-head">
           <div>
-            <h3>Add a product</h3>
-            <p>Create a new release for the NextGen Update catalogue.</p>
+            <h3>{editingId !== null ? 'Edit product' : 'Add a product'}</h3>
+            <p>
+              {editingId !== null
+                ? 'Update any field below and save your changes.'
+                : 'Create a new release for the NextGen Update catalogue.'}
+            </p>
           </div>
         </div>
 
@@ -281,8 +328,12 @@ export default function Products() {
           <div className="form-actions field--wide">
             {error && <p className="form-error" role="alert">{error}</p>}
             {saved && <p className="form-success" role="status">{saved}</p>}
-            <button type="submit" className="btn btn-primary">Add product <span className="arrow">→</span></button>
-            <button type="button" className="btn btn-ghost" onClick={() => { setForm(initialForm); setError(''); setSaved('') }}>Clear</button>
+            <button type="submit" className="btn btn-primary">
+              {editingId !== null ? 'Save changes' : 'Add product'} <span className="arrow">→</span>
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={resetForm}>
+              {editingId !== null ? 'Cancel' : 'Clear'}
+            </button>
           </div>
         </form>
       </div>
@@ -344,8 +395,11 @@ export default function Products() {
                     <td>{formatPrice(product.price)}</td>
                     <td>{product.badge ? <span className="tag">{product.badge}</span> : <span className="muted">—</span>}</td>
                     <td>{formatDate(product.published)}</td>
-                    <td>
-                      <button type="button" className="row-action row-action--danger" onClick={() => removeProduct(product.id)}>
+                    <td className="actions-cell">
+                      <button type="button" className="row-action" onClick={() => startEdit(product)}>
+                        Edit
+                      </button>
+                      <button type="button" className="row-action row-action--danger" onClick={() => handleDelete(product.id)}>
                         Delete
                       </button>
                     </td>

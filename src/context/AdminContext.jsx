@@ -73,6 +73,11 @@ export function AdminProvider({ children }) {
       ])
     }
 
+    const updateProduct = (id, patch) =>
+      setProducts((current) =>
+        current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+      )
+
     const removeProduct = (id) => setProducts((current) => current.filter((item) => item.id !== id))
 
     const updatePayment = (id, status) =>
@@ -103,6 +108,7 @@ export function AdminProvider({ children }) {
       logout,
       products,
       addProduct,
+      updateProduct,
       removeProduct,
       payments,
       updatePayment,
