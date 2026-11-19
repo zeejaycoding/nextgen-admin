@@ -31,7 +31,7 @@ export default function AdminLogin() {
         </div>
 
         <h1>Welcome back</h1>
-        <p className="login-subtitle">Sign in to manage NextGen.</p>
+        <p className="login-subtitle">Sign in to manage NextGen Update.</p>
 
         <form className="admin-form" onSubmit={handleSubmit} noValidate>
           <label className="field">
@@ -40,7 +40,7 @@ export default function AdminLogin() {
               type="email"
               value={email}
               onChange={(event) => { setEmail(event.target.value); setError('') }}
-              placeholder="admin@nextgen.com"
+              placeholder="admin@nextgenupdate.com"
               autoComplete="username"
             />
           </label>

@@ -131,7 +131,7 @@ export default function Products() {
       category: form.category,
       price: Number(form.price),
       badge: form.badge,
-      contact: form.contact.trim() || 'NextGen Team',
+      contact: form.contact.trim() || 'NextGen Update Team',
       published: form.published,
       version: form.version.trim() || '1.0',
       description: form.description.trim(),
@@ -162,7 +162,7 @@ export default function Products() {
         <div className="panel-head">
           <div>
             <h3>Add a product</h3>
-            <p>Create a new release for the NextGen catalogue.</p>
+            <p>Create a new release for the NextGen Update catalogue.</p>
           </div>
         </div>
 
@@ -195,7 +195,7 @@ export default function Products() {
           </label>
 
           <label className="field">
-            <span>Price (€)</span>
+            <span>Price ($)</span>
             <input type="number" min="0" step="0.01" value={form.price} onChange={update('price')} placeholder="0.00" />
           </label>
 
@@ -221,7 +221,7 @@ export default function Products() {
 
           <label className="field">
             <span>Contact</span>
-            <input type="text" value={form.contact} onChange={update('contact')} placeholder="NextGen Team" />
+            <input type="text" value={form.contact} onChange={update('contact')} placeholder="NextGen Update Team" />
           </label>
 
           <div className="field field--wide">

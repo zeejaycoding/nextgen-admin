@@ -20,7 +20,7 @@ export default function Dashboard() {
       <div className="page-intro">
         <div>
           <h2>Overview</h2>
-          <p>A quick look at what is happening across NextGen.</p>
+          <p>A quick look at what is happening across NextGen Update.</p>
         </div>
       </div>
 

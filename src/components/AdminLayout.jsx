@@ -79,9 +79,9 @@ export default function AdminLayout() {
       <div className="admin-main">
         <header className="admin-topbar">
           <div className="mobile-topbar">
-            <Link to="/admin" className="mobile-brand" aria-label="NextGen admin home">
+            <Link to="/admin" className="mobile-brand" aria-label="NextGen Update admin home">
               <Logo size={34} withText={false} />
-              <span>NEXTGEN <b>ADMIN</b></span>
+              <span>NEXTGEN UPDATE <b>ADMIN</b></span>
             </Link>
             <button type="button" className="mobile-logout-btn" onClick={handleLogout} aria-label="Log out">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -91,14 +91,14 @@ export default function AdminLayout() {
           </div>
 
           <div className="topbar-title">
-            <span className="topbar-kicker">NextGen / Admin</span>
+            <span className="topbar-kicker">NextGen Update / Admin</span>
             <h1>{titleFor(pathname)}</h1>
           </div>
           <div className="topbar-user">
             <span className="avatar">AD</span>
             <div>
               <strong>Admin</strong>
-              <span>admin@nextgen.com</span>
+              <span>admin@nextgenupdate.com</span>
             </div>
           </div>
         </header>

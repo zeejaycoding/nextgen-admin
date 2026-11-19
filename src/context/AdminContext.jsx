@@ -30,7 +30,12 @@ const AdminContext = createContext(null)
 export function AdminProvider({ children }) {
   const [authed, setAuthed] = useState(() => read(KEYS.auth, false))
   const [products, setProducts] = useState(() => read(KEYS.products, seedProducts))
-  const [payments, setPayments] = useState(() => read(KEYS.payments, seedPayments))
+  const [payments, setPayments] = useState(() =>
+    read(KEYS.payments, seedPayments).map((item) => ({
+      ...item,
+      method: item.method === 'PayPal' ? 'Apple Pay' : item.method,
+    })),
+  )
   const [users, setUsers] = useState(() => read(KEYS.users, seedUsers))
 
   useEffect(() => save(KEYS.auth, authed), [authed])
@@ -118,7 +123,7 @@ export function useAdmin() {
 }
 
 export function formatPrice(price) {
-  return Number(price) === 0 ? 'FREE' : `€${Number(price).toFixed(2)}`
+  return Number(price) === 0 ? 'FREE' : `$${Number(price).toFixed(2)}`
 }
 
 export function formatDate(value) {

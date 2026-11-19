@@ -70,7 +70,7 @@ export default function Users() {
           <div className="panel-head">
             <div>
               <h3>Add a user</h3>
-              <p>Create a new NextGen member.</p>
+              <p>Create a new NextGen Update member.</p>
             </div>
           </div>
           <form className="admin-form" onSubmit={handleSubmit} noValidate>
