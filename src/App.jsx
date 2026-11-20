@@ -5,6 +5,7 @@ import AdminLogin from './pages/AdminLogin'
 import Dashboard from './pages/Dashboard'
 import Payments from './pages/Payments'
 import Products from './pages/Products'
+import Settings from './pages/Settings'
 import Users from './pages/Users'
 
 function Protected({ children }) {
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="products" element={<Products />} />
         <Route path="payments" element={<Payments />} />
         <Route path="users" element={<Users />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>

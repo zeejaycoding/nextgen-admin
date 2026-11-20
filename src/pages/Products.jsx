@@ -168,7 +168,7 @@ export default function Products() {
       category: form.category,
       price: Number(form.price),
       badge: form.badge,
-      contact: form.contact.trim() || 'NextGen Update Team',
+      contact: form.contact.trim() || 'DOMIGEN Team',
       published: form.published,
       version: form.version.trim() || '1.0',
       description: form.description.trim(),
@@ -210,7 +210,7 @@ export default function Products() {
             <p>
               {editingId !== null
                 ? 'Update any field below and save your changes.'
-                : 'Create a new release for the NextGen Update catalogue.'}
+                : 'Create a new release for the DOMIGEN catalogue.'}
             </p>
           </div>
         </div>
@@ -267,7 +267,7 @@ export default function Products() {
 
           <label className="field">
             <span>Contact</span>
-            <input type="text" value={form.contact} onChange={update('contact')} placeholder="NextGen Update Team" />
+            <input type="text" value={form.contact} onChange={update('contact')} placeholder="DOMIGEN Team" />
           </label>
 
           <div className="field field--wide">

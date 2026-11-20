@@ -4,15 +4,18 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import Splash from './components/Splash'
 import { AdminProvider } from './context/AdminContext'
+import { SiteSettingsProvider } from './context/SiteSettingsContext'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <Splash />
-    <BrowserRouter>
-      <AdminProvider>
-        <App />
-      </AdminProvider>
-    </BrowserRouter>
+    <SiteSettingsProvider>
+      <Splash />
+      <BrowserRouter>
+        <AdminProvider>
+          <App />
+        </AdminProvider>
+      </BrowserRouter>
+    </SiteSettingsProvider>
   </React.StrictMode>,
 )

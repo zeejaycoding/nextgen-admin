@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAdmin } from '../context/AdminContext'
+import { useSiteSettings } from '../context/SiteSettingsContext'
 import Logo from './Logo'
 
 const navItems = [
@@ -24,19 +25,27 @@ const navItems = [
     label: 'Users',
     icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5Z',
   },
+  {
+    to: '/admin/settings',
+    label: 'Settings',
+    icon: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8-3.5c0-.5 0-1-.1-1.4l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2.5-1.4L14.6 3H9.4l-.4 2.4a7 7 0 0 0-2.5 1.4l-2.4-1-2 3.4 2 1.6a8 8 0 0 0 0 2.8l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2.5 1.4l.4 2.4h5.2l.4-2.4a7 7 0 0 0 2.5-1.4l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.4Z',
+  },
 ]
 
 function titleFor(pathname) {
   if (pathname.startsWith('/admin/products')) return 'Products'
   if (pathname.startsWith('/admin/payments')) return 'Payments'
   if (pathname.startsWith('/admin/users')) return 'Users'
+  if (pathname.startsWith('/admin/settings')) return 'Settings'
   return 'Dashboard'
 }
 
 export default function AdminLayout() {
   const { logout } = useAdmin()
+  const { name } = useSiteSettings()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const mobileNavItems = navItems.filter((item) => item.to !== '/admin/settings')
 
   const handleLogout = () => {
     logout()
@@ -47,7 +56,7 @@ export default function AdminLayout() {
     <div className="admin-shell">
       <aside className="admin-sidebar">
         <div className="sidebar-brand">
-          <Logo size={40} />
+          <Logo size={40} withTagline={false} />
         </div>
 
         <nav className="sidebar-nav" aria-label="Admin navigation">
@@ -79,26 +88,28 @@ export default function AdminLayout() {
       <div className="admin-main">
         <header className="admin-topbar">
           <div className="mobile-topbar">
-            <Link to="/admin" className="mobile-brand" aria-label="NextGen Update admin home">
+            <Link to="/admin" className="mobile-brand" aria-label={`${name} admin home`}>
               <Logo size={34} withText={false} />
-              <span>NEXTGEN UPDATE <b>ADMIN</b></span>
+              <span>{name.toUpperCase()} <b>ADMIN</b></span>
             </Link>
-            <button type="button" className="mobile-logout-btn" onClick={handleLogout} aria-label="Log out">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v-2H5V5h5V3Zm5.5 4L14 8.5l3.5 3.5H8v2h9.5L14 17.5 15.5 19 21 13.5 15.5 7Z" />
-              </svg>
-            </button>
+            <div className="mobile-actions">
+              <button type="button" className="mobile-logout-btn" onClick={handleLogout} aria-label="Log out">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5v-2H5V5h5V3Zm5.5 4L14 8.5l3.5 3.5H8v2h9.5L14 17.5 15.5 19 21 13.5 15.5 7Z" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="topbar-title">
-            <span className="topbar-kicker">NextGen Update / Admin</span>
+            <span className="topbar-kicker">{name} / Admin</span>
             <h1>{titleFor(pathname)}</h1>
           </div>
           <div className="topbar-user">
             <span className="avatar">AD</span>
             <div>
               <strong>Admin</strong>
-              <span>admin@nextgenupdate.com</span>
+              <span>admin@domigen.com</span>
             </div>
           </div>
         </header>
@@ -109,7 +120,7 @@ export default function AdminLayout() {
       </div>
 
       <nav className="bottom-nav" aria-label="Mobile navigation">
-        {navItems.map((item) => (
+        {mobileNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

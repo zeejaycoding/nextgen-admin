@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Site settings sync</title></head>
+  <body>
+    <script>
+      window.addEventListener('message', function (event) {
+        var data = event.data
+        if (!data || data.type !== 'DOMIGEN_REQUEST_SETTINGS') return
+        var settings = null
+        try {
+          settings = JSON.parse(localStorage.getItem('domigen-site-settings') || 'null')
+        } catch (error) {
+          settings = null
+        }
+        if (!settings) {
+          settings = {
+            name: 'DOMIGEN',
+            tagline: 'Gaming . accounts . tools',
+            logo: '/images/domigen-logo.jpeg'
+          }
+        }
+        window.parent.postMessage({ type: 'DOMIGEN_SETTINGS', settings: settings }, '*')
+      })
+    </script>
+  </body>
+</html>

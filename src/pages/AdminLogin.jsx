@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import Logo from '../components/Logo'
 import { useAdmin } from '../context/AdminContext'
+import { useSiteSettings } from '../context/SiteSettingsContext'
 
 export default function AdminLogin() {
   const { authed, login } = useAdmin()
+  const { name } = useSiteSettings()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -26,12 +28,12 @@ export default function AdminLogin() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <Logo size={44} />
+          <Logo size={44} withTagline={false} />
           <span className="login-badge">ADMIN</span>
         </div>
 
         <h1>Welcome back</h1>
-        <p className="login-subtitle">Sign in to manage NextGen Update.</p>
+        <p className="login-subtitle">Sign in to manage {name}.</p>
 
         <form className="admin-form" onSubmit={handleSubmit} noValidate>
           <label className="field">
@@ -40,7 +42,7 @@ export default function AdminLogin() {
               type="email"
               value={email}
               onChange={(event) => { setEmail(event.target.value); setError('') }}
-              placeholder="admin@nextgenupdate.com"
+              placeholder="admin@domigen.com"
               autoComplete="username"
             />
           </label>
