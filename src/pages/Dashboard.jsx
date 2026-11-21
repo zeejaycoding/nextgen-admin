@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { formatDate, formatPrice, useAdmin } from '../context/AdminContext'
+import { useAdmin } from '../context/AdminContext'
+import { formatDate, formatPrice } from '../lib/format'
 
 export default function Dashboard() {
   const { products, payments, users } = useAdmin()

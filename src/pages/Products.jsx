@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { formatDate, formatPrice, useAdmin } from '../context/AdminContext'
+import { useAdmin } from '../context/AdminContext'
+import { formatDate, formatPrice } from '../lib/format'
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -62,10 +63,12 @@ export default function Products() {
   const [editingId, setEditingId] = useState(null)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const [query, setQuery] = useState('')
   const [viewer, setViewer] = useState(null)
   const mainInput = useRef(null)
   const shotsInput = useRef(null)
+  const isFreeBadge = form.badge === 'Free'
 
   useEffect(() => {
     if (!viewer) return undefined
@@ -85,6 +88,13 @@ export default function Products() {
 
   const update = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
+    setError('')
+    setSaved('')
+  }
+
+  const updateBadge = (event) => {
+    const badge = event.target.value
+    setForm((current) => ({ ...current, badge, price: badge === 'Free' ? '0' : current.price }))
     setError('')
     setSaved('')
   }
@@ -140,7 +150,7 @@ export default function Products() {
       title: product.title || '',
       game: product.game || 'MW3',
       category: product.category || 'Mod',
-      price: product.price ?? '',
+      price: product.badge === 'Free' ? 0 : (product.price ?? ''),
       badge: product.badge || '',
       contact: product.contact || '',
       published: product.published || today,
@@ -156,17 +166,19 @@ export default function Products() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
 
     if (form.title.trim().length < 3) return setError('Product title needs at least 3 characters.')
-    if (form.price === '' || Number(form.price) < 0) return setError('Enter a valid price (0 for free).')
+    if (!isFreeBadge && (form.price === '' || Number(form.price) < 0)) {
+      return setError('Enter a valid price (0 for free).')
+    }
 
     const payload = {
       title: form.title.trim(),
       game: form.game,
       category: form.category,
-      price: Number(form.price),
+      price: isFreeBadge ? 0 : Number(form.price),
       badge: form.badge,
       contact: form.contact.trim() || 'DOMIGEN Team',
       published: form.published,
@@ -179,10 +191,15 @@ export default function Products() {
     }
 
     const wasEditing = editingId !== null
-    if (wasEditing) {
-      updateProduct(editingId, payload)
-    } else {
-      addProduct(payload)
+    setSubmitting(true)
+    const message = wasEditing
+      ? await updateProduct(editingId, payload)
+      : await addProduct(payload)
+    setSubmitting(false)
+
+    if (message) {
+      setError(message)
+      return
     }
 
     setEditingId(null)
@@ -242,7 +259,18 @@ export default function Products() {
 
           <label className="field">
             <span>Price ($)</span>
-            <input type="number" min="0" step="0.01" value={form.price} onChange={update('price')} placeholder="0.00" />
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={isFreeBadge ? 0 : form.price}
+              onChange={update('price')}
+              placeholder="0.00"
+              disabled={isFreeBadge}
+            />
+            {isFreeBadge && (
+              <span className="field-hint">Free products are always $0. Any entered price is ignored.</span>
+            )}
           </label>
 
           <label className="field">
@@ -252,12 +280,14 @@ export default function Products() {
 
           <label className="field">
             <span>Badge</span>
-            <select value={form.badge} onChange={update('badge')}>
+            <select value={form.badge} onChange={updateBadge}>
               <option value="">None</option>
               <option>New</option>
               <option>Featured</option>
+              <option>Bestseller</option>
               <option>Free</option>
             </select>
+            <span className="field-hint">Bestseller pins this product to Most Sold on the home page.</span>
           </label>
 
           <label className="field">
@@ -327,8 +357,8 @@ export default function Products() {
           <div className="form-actions field--wide">
             {error && <p className="form-error" role="alert">{error}</p>}
             {saved && <p className="form-success" role="status">{saved}</p>}
-            <button type="submit" className="btn btn-primary">
-              {editingId !== null ? 'Save changes' : 'Add product'} <span className="arrow">→</span>
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Saving…' : editingId !== null ? 'Save changes' : 'Add product'} <span className="arrow">→</span>
             </button>
             <button type="button" className="btn btn-ghost" onClick={resetForm}>
               {editingId !== null ? 'Cancel' : 'Clear'}
@@ -364,6 +394,7 @@ export default function Products() {
                 <th>Category</th>
                 <th>Price</th>
                 <th>Badge</th>
+                <th>Sold</th>
                 <th>Published</th>
                 <th>Action</th>
               </tr>
@@ -391,8 +422,9 @@ export default function Products() {
                     <td><strong>{product.title}</strong></td>
                     <td>{product.game}</td>
                     <td>{product.category}</td>
-                    <td>{formatPrice(product.price)}</td>
+                    <td>{product.badge === 'Free' ? 'FREE' : formatPrice(product.price)}</td>
                     <td>{product.badge ? <span className="tag">{product.badge}</span> : <span className="muted">—</span>}</td>
+                    <td>{Number(product.sold || 0)}</td>
                     <td>{formatDate(product.published)}</td>
                     <td className="actions-cell">
                       <button type="button" className="row-action" onClick={() => startEdit(product)}>
@@ -406,7 +438,7 @@ export default function Products() {
                 )
               })}
               {visible.length === 0 && (
-                <tr><td colSpan="8" className="empty-row">No products match your search.</td></tr>
+                <tr><td colSpan="9" className="empty-row">No products match your search.</td></tr>
               )}
             </tbody>
           </table>

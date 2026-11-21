@@ -1,12 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { apiFetch, createSocket } from '../lib/api'
+import { DEFAULT_SETTINGS } from '../lib/site-settings'
 
-export const SETTINGS_KEY = 'domigen-site-settings'
-
-export const DEFAULT_SETTINGS = {
-  name: 'DOMIGEN',
-  tagline: 'Gaming . accounts . tools',
-  logo: '/images/domigen-logo.jpeg',
-}
+const SETTINGS_KEY = 'domigen-site-settings'
 
 const APPLY = 'DOMIGEN_APPLY_SETTINGS'
 const SETTINGS = 'DOMIGEN_SETTINGS'
@@ -31,7 +27,7 @@ function read() {
   }
 }
 
-const configuredFrontend = import.meta.env.VITE_FRONTEND_URL || (import.meta.env.DEV ? 'http://127.0.0.1:5173' : '')
+const configuredFrontend = import.meta.env.VITE_FRONTEND_URL || (import.meta.env.DEV ? 'http://localhost:5173' : '')
 
 export function SiteSettingsProvider({ children }) {
   const [settings, setSettings] = useState(read)
@@ -43,17 +39,55 @@ export function SiteSettingsProvider({ children }) {
     bridge.current?.contentWindow?.postMessage({ type: APPLY, settings: next }, '*')
   }, [])
 
-  const saveSettings = useCallback((next) => {
+  const saveSettings = useCallback(async (next) => {
     const clean = normalize(next)
-    setSettings(clean)
-    latest.current = clean
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(clean))
-    } catch {
-      /* storage can be unavailable — settings still work in memory */
+      const remote = await apiFetch('/settings', {
+        method: 'PUT',
+        body: JSON.stringify(clean),
+      })
+      const saved = normalize(remote)
+      setSettings(saved)
+      latest.current = saved
+      try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(saved))
+      } catch {
+        /* storage can be unavailable — the saved server copy is still applied */
+      }
+      push(saved)
+      return null
+    } catch (error) {
+      if (error?.status) return error.message || 'Request failed.'
+      return 'Unable to reach the server. Check that the backend is running.'
     }
-    push(clean)
   }, [push])
+
+  useEffect(() => {
+    let active = true
+
+    apiFetch('/settings')
+      .then((remote) => {
+        if (active) {
+          const clean = normalize(remote)
+          setSettings(clean)
+          latest.current = clean
+        }
+      })
+      .catch(() => {})
+
+    const socket = createSocket()
+    socket.on('settings', (incoming) => {
+      const clean = normalize(incoming)
+      setSettings(clean)
+      latest.current = clean
+    })
+    socket.connect()
+
+    return () => {
+      active = false
+      socket.disconnect()
+    }
+  }, [])
 
   useEffect(() => {
     const onStorage = (event) => {

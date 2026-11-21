@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { DEFAULT_SETTINGS, useSiteSettings } from '../context/SiteSettingsContext'
+import { useSiteSettings } from '../context/SiteSettingsContext'
+import { DEFAULT_SETTINGS } from '../lib/site-settings'
 
 /** Resize an attached logo so it fits comfortably in localStorage. */
 function attachLogo(file, maxSize = 600, quality = 0.8) {
@@ -63,7 +64,7 @@ export default function Settings() {
     }
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
     if (form.name.trim().length < 2) return setError('Website name needs at least 2 characters.')
     const next = {
@@ -71,9 +72,16 @@ export default function Settings() {
       tagline: form.tagline.trim() || DEFAULT_SETTINGS.tagline,
       logo: form.logo,
     }
-    saveSettings(next)
-    setForm(next)
+
     setError('')
+    setSaved('')
+    const message = await saveSettings(next)
+    if (message) {
+      setError(message)
+      return
+    }
+
+    setForm(next)
     setSaved('Site name and logo updated. The public site is synced automatically.')
   }
 

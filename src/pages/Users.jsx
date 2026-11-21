@@ -1,13 +1,22 @@
 import { useState } from 'react'
-import { formatDate, useAdmin } from '../context/AdminContext'
+import { useAdmin } from '../context/AdminContext'
+import { formatDate } from '../lib/format'
 
-const initialForm = { name: '', email: '', role: 'Member' }
+const initialForm = {
+  name: '',
+  email: '',
+  password: '',
+  role: 'Member',
+  status: 'Active',
+}
 
 export default function Users() {
-  const { users, addUser, toggleUser, removeUser } = useAdmin()
+  const { users, addUser, updateUser, toggleUser, removeUser } = useAdmin()
   const [form, setForm] = useState(initialForm)
+  const [editingId, setEditingId] = useState(null)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const [query, setQuery] = useState('')
   const [showForm, setShowForm] = useState(false)
 
@@ -21,18 +30,72 @@ export default function Users() {
     setSaved('')
   }
 
-  const handleSubmit = (event) => {
+  const startAdd = () => {
+    setEditingId(null)
+    setForm(initialForm)
+    setError('')
+    setSaved('')
+    setShowForm(true)
+  }
+
+  const startEdit = (user) => {
+    setEditingId(user.id)
+    setForm({
+      name: user.name || '',
+      email: user.email || '',
+      password: '',
+      role: user.role || 'Member',
+      status: user.status || 'Active',
+    })
+    setError('')
+    setSaved('')
+    setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    if (form.name.trim().length < 2) return setError('Enter a name with at least 2 characters.')
-    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) return setError('Enter a valid email address.')
-    if (users.some((item) => item.email.toLowerCase() === form.email.trim().toLowerCase())) {
+    const name = form.name.trim()
+    const email = form.email.trim()
+
+    if (name.length < 2) return setError('Enter a name with at least 2 characters.')
+    if (!/^\S+@\S+\.\S+$/.test(email)) return setError('Enter a valid email address.')
+    if (form.password && form.password.length < 8) {
+      return setError('Password must be at least 8 characters.')
+    }
+    if (!editingId && !form.password) return setError('Set a password for this account.')
+    if (users.some((item) => (
+      String(item.id) !== String(editingId)
+      && item.email.toLowerCase() === email.toLowerCase()
+    ))) {
       return setError('That email is already registered.')
     }
 
-    addUser({ name: form.name.trim(), email: form.email.trim(), role: form.role, status: 'Active' })
+    const payload = { name, email, role: form.role, status: form.status }
+    if (form.password) payload.password = form.password
+
+    const wasEditing = editingId !== null
+    setSubmitting(true)
+    const message = wasEditing
+      ? await updateUser(editingId, payload)
+      : await addUser(payload)
+    setSubmitting(false)
+
+    if (message) {
+      setError(message)
+      return
+    }
+
     setForm(initialForm)
+    setEditingId(null)
+    setShowForm(false)
     setError('')
-    setSaved('User added successfully.')
+    setSaved(wasEditing ? 'User updated successfully.' : 'User added successfully.')
+  }
+
+  const handleDelete = (user) => {
+    if (!window.confirm(`Delete ${user.name}'s account?`)) return
+    removeUser(user.id)
   }
 
   const visible = users.filter((item) => {
@@ -69,8 +132,12 @@ export default function Users() {
         <div className="panel">
           <div className="panel-head">
             <div>
-              <h3>Add a user</h3>
-              <p>Create a new DOMIGEN member.</p>
+              <h3>{editingId !== null ? 'Edit user' : 'Add a user'}</h3>
+              <p>
+                {editingId !== null
+                  ? 'Update account details or leave the password blank to keep the current one.'
+                  : 'Create a new DOMIGEN member with a password they can sign in with.'}
+              </p>
             </div>
           </div>
           <form className="admin-form" onSubmit={handleSubmit} noValidate>
@@ -83,17 +150,42 @@ export default function Users() {
               <input type="email" value={form.email} onChange={update('email')} placeholder="name@example.com" />
             </label>
             <label className="field">
+              <span>{editingId !== null ? 'New password (optional)' : 'Password'}</span>
+              <input
+                type="password"
+                value={form.password}
+                onChange={update('password')}
+                placeholder={editingId !== null ? 'Leave blank to keep current' : 'At least 8 characters'}
+                autoComplete="new-password"
+              />
+            </label>
+            <label className="field">
               <span>Role</span>
               <select value={form.role} onChange={update('role')}>
                 <option>Member</option>
                 <option>Admin</option>
               </select>
             </label>
+            <label className="field">
+              <span>Status</span>
+              <select value={form.status} onChange={update('status')}>
+                <option>Active</option>
+                <option>Suspended</option>
+              </select>
+            </label>
             <div className="form-actions">
               {error && <p className="form-error" role="alert">{error}</p>}
               {saved && <p className="form-success" role="status">{saved}</p>}
-              <button type="submit" className="btn btn-primary">Add user</button>
-              <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={submitting}>
+                {submitting ? 'Saving…' : editingId !== null ? 'Save changes' : 'Add user'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => { setShowForm(false); setEditingId(null); setForm(initialForm) }}
+              >
+                Cancel
+              </button>
             </div>
           </form>
         </div>
@@ -103,7 +195,8 @@ export default function Users() {
         <div className="panel-head">
           <div>
             <h3>Members</h3>
-            <p>Manage roles and account access.</p>
+            <p>Manage accounts, roles, passwords and access.</p>
+            {saved && <p className="form-success" role="status">{saved}</p>}
           </div>
           <div className="panel-tools">
             <label className="table-search">
@@ -116,7 +209,7 @@ export default function Users() {
               />
             </label>
             {!showForm && (
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}>+ Add user</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={startAdd}>+ Add user</button>
             )}
           </div>
         </div>
@@ -142,10 +235,11 @@ export default function Users() {
                   <td><span className={`status status--${user.status.toLowerCase()}`}>{user.status}</span></td>
                   <td>{formatDate(user.joined)}</td>
                   <td className="actions-cell">
+                    <button type="button" className="row-action" onClick={() => startEdit(user)}>Edit</button>
                     <button type="button" className="row-action" onClick={() => toggleUser(user.id)}>
                       {user.status === 'Active' ? 'Suspend' : 'Activate'}
                     </button>
-                    <button type="button" className="row-action row-action--danger" onClick={() => removeUser(user.id)}>
+                    <button type="button" className="row-action row-action--danger" onClick={() => handleDelete(user)}>
                       Delete
                     </button>
                   </td>

@@ -11,12 +11,15 @@ export default function AdminLogin() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   if (authed) return <Navigate to="/admin" replace />
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    const message = login(email, password)
+    setSubmitting(true)
+    const message = await login(email, password)
+    setSubmitting(false)
     if (message) {
       setError(message)
       return
@@ -60,8 +63,8 @@ export default function AdminLogin() {
 
           {error && <p className="form-error" role="alert">{error}</p>}
 
-          <button type="submit" className="btn btn-primary btn-block login-submit">
-            Sign in <span className="arrow">→</span>
+          <button type="submit" className="btn btn-primary btn-block login-submit" disabled={submitting}>
+            {submitting ? 'Signing in…' : 'Sign in'} <span className="arrow">→</span>
           </button>
         </form>
       </div>

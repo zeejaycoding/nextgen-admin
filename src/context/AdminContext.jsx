@@ -1,109 +1,272 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { seedPayments, seedProducts, seedUsers } from '../data/seed'
+import {
+  apiFetch,
+  clearAdminToken,
+  createSocket,
+  getAdminToken,
+  setAdminToken,
+} from '../lib/api'
 
 const KEYS = {
-  auth: 'nextgen-admin-auth',
   products: 'nextgen-admin-products',
   payments: 'nextgen-admin-payments',
   users: 'nextgen-admin-users',
 }
 
-function read(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? JSON.parse(raw) : fallback
-  } catch {
-    return fallback
-  }
-}
+const ADMIN_EMAIL = 'admin@domigen.com'
+const ADMIN_PASSWORD = 'admin321'
 
 function save(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value))
   } catch {
-    /* storage can be unavailable in private browsing — demo still works in memory */
+    /* storage can be unavailable in private browsing — the panel still works in memory */
   }
+}
+
+function errorMessage(error) {
+  if (error?.status) return error.message || 'Request failed.'
+  return 'Unable to reach the server. Check that the backend is running.'
+}
+
+function mapPayments(items) {
+  return items.map((item) => ({
+    ...item,
+    method: item.method === 'PayPal' ? 'Apple Pay' : item.method,
+  }))
 }
 
 const AdminContext = createContext(null)
 
 export function AdminProvider({ children }) {
-  const [authed, setAuthed] = useState(() => read(KEYS.auth, false))
-  const [products, setProducts] = useState(() => read(KEYS.products, seedProducts))
-  const [payments, setPayments] = useState(() =>
-    read(KEYS.payments, seedPayments).map((item) => ({
-      ...item,
-      method: item.method === 'PayPal' ? 'Apple Pay' : item.method,
-    })),
-  )
-  const [users, setUsers] = useState(() => read(KEYS.users, seedUsers))
+  const [authed, setAuthed] = useState(false)
+  const [products, setProducts] = useState([])
+  const [payments, setPayments] = useState([])
+  const [users, setUsers] = useState([])
+  const [apiError, setApiError] = useState('')
+  const [socketError, setSocketError] = useState('')
 
-  useEffect(() => save(KEYS.auth, authed), [authed])
+  const markApiError = (error) => {
+    const message = errorMessage(error)
+    if (!error?.status || error.status >= 500) setApiError(message)
+    if (error?.status === 401) {
+      clearAdminToken()
+      setAuthed(false)
+      setApiError('Your session expired. Please sign in again.')
+    }
+    return message
+  }
+
+  const backendError = apiError || socketError
+
+  useEffect(() => {
+    /* Sessions never survive a reload — every visit starts at the login page. */
+    try {
+      localStorage.removeItem('nextgen-admin-auth')
+    } catch {
+      /* storage can be unavailable in private browsing */
+    }
+    clearAdminToken()
+  }, [])
   useEffect(() => save(KEYS.products, products), [products])
   useEffect(() => save(KEYS.payments, payments), [payments])
   useEffect(() => save(KEYS.users, users), [users])
 
+  useEffect(() => {
+    if (!authed || !getAdminToken()) return undefined
+
+    let active = true
+
+    apiFetch('/admin/bootstrap')
+      .then((data) => {
+        if (!active) return
+        setApiError('')
+        if (Array.isArray(data?.products)) setProducts(data.products)
+        if (Array.isArray(data?.payments)) setPayments(mapPayments(data.payments))
+        if (Array.isArray(data?.users)) setUsers(data.users)
+      })
+      .catch((error) => {
+        /* Never show stale or local-only records as if they were live data. */
+        if (!active) return
+        setProducts([])
+        setPayments([])
+        setUsers([])
+        markApiError(error)
+      })
+
+    const socket = createSocket({ token: getAdminToken() })
+    socket.on('connect', () => setSocketError(''))
+    socket.on('connect_error', () => setSocketError(
+      'Real-time updates are unavailable. Changes may not appear until you refresh.',
+    ))
+    socket.on('products', (list) => Array.isArray(list) && setProducts(list))
+    socket.on('payments', (list) => Array.isArray(list) && setPayments(mapPayments(list)))
+    socket.on('users', (list) => Array.isArray(list) && setUsers(list))
+    socket.connect()
+
+    return () => {
+      active = false
+      socket.disconnect()
+    }
+  }, [authed])
+
   const value = useMemo(() => {
-    const login = (email, password) => {
-      if (!/^\S+@\S+\.\S+$/.test(email.trim())) return 'Enter a valid email address.'
-      if (password.length < 4) return 'Password must be at least 4 characters.'
+    const reloadProducts = async () => setProducts(await apiFetch('/products'))
+    const reloadPayments = async () => setPayments(mapPayments(await apiFetch('/admin/payments')))
+    const reloadUsers = async () => setUsers(await apiFetch('/admin/users'))
+
+    const login = async (email, password) => {
+      const cleanEmail = String(email).trim()
+      if (cleanEmail !== ADMIN_EMAIL || String(password) !== ADMIN_PASSWORD) {
+        return 'Invalid email or password.'
+      }
+
+      try {
+        const data = await apiFetch('/admin/login', {
+          method: 'POST',
+          token: '',
+          body: JSON.stringify({ email: cleanEmail, password }),
+        })
+        setAdminToken(data.token)
+      } catch (error) {
+        return markApiError(error)
+      }
+
       setAuthed(true)
       return null
     }
 
-    const logout = () => setAuthed(false)
-
-    const addProduct = (product) => {
-      const nextId = products.reduce((max, item) => Math.max(max, item.id), 0) + 1
-      const slug = product.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-      setProducts((current) => [
-        {
-          ...product,
-          id: nextId,
-          slug: `${nextId}-${slug}`,
-          images: product.images || [],
-          features: product.features || [],
-          video: product.video || '',
-          published: product.published || new Date().toISOString().slice(0, 10),
-        },
-        ...current,
-      ])
+    const logout = () => {
+      clearAdminToken()
+      setAuthed(false)
     }
 
-    const updateProduct = (id, patch) =>
-      setProducts((current) =>
-        current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-      )
-
-    const removeProduct = (id) => setProducts((current) => current.filter((item) => item.id !== id))
-
-    const updatePayment = (id, status) =>
-      setPayments((current) => current.map((item) => (item.id === id ? { ...item, status } : item)))
-
-    const addUser = (user) => {
-      const nextId = users.reduce((max, item) => Math.max(max, item.id), 0) + 1
-      setUsers((current) => [
-        { ...user, id: nextId, joined: new Date().toISOString().slice(0, 10) },
-        ...current,
-      ])
+    const addProduct = async (product) => {
+      try {
+        await apiFetch('/products', {
+          method: 'POST',
+          body: JSON.stringify(product),
+        })
+        await reloadProducts()
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
     }
 
-    const toggleUser = (id) =>
-      setUsers((current) =>
-        current.map((item) =>
-          item.id === id
-            ? { ...item, status: item.status === 'Active' ? 'Suspended' : 'Active' }
-            : item,
-        ),
-      )
+    const updateProduct = async (id, patch) => {
+      try {
+        await apiFetch(`/products/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          body: JSON.stringify(patch),
+        })
+        await reloadProducts()
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
 
-    const removeUser = (id) => setUsers((current) => current.filter((item) => item.id !== id))
+    const removeProduct = async (id) => {
+      try {
+        await apiFetch(`/products/${encodeURIComponent(id)}`, { method: 'DELETE' })
+        await reloadProducts()
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
+
+    const updatePayment = async (id, status) => {
+      try {
+        await apiFetch(`/admin/payments/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status }),
+        })
+        await reloadPayments()
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
+
+    const addPayment = async (payment) => {
+      try {
+        await apiFetch('/admin/payments', {
+          method: 'POST',
+          body: JSON.stringify(payment),
+        })
+        await reloadPayments()
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
+
+    const removePayment = async (id) => {
+      try {
+        await apiFetch(`/admin/payments/${encodeURIComponent(id)}`, { method: 'DELETE' })
+        await reloadPayments()
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
+
+    const addUser = async (user) => {
+      try {
+        await apiFetch('/admin/users', {
+          method: 'POST',
+          body: JSON.stringify(user),
+        })
+        await reloadUsers()
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
+
+    const updateUser = async (id, changes) => {
+      try {
+        await apiFetch(`/admin/users/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(changes),
+        })
+        await reloadUsers()
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
+
+    const toggleUser = async (id) => {
+      const target = users.find((item) => String(item.id) === String(id))
+      const status = target?.status === 'Active' ? 'Suspended' : 'Active'
+      try {
+        await apiFetch(`/admin/users/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status }),
+        })
+        await reloadUsers()
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
+
+    const removeUser = async (id) => {
+      try {
+        await apiFetch(`/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' })
+        await reloadUsers()
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
 
     return {
       authed,
+      backendError,
       login,
       logout,
       products,
@@ -112,12 +275,15 @@ export function AdminProvider({ children }) {
       removeProduct,
       payments,
       updatePayment,
+      addPayment,
+      removePayment,
       users,
       addUser,
+      updateUser,
       toggleUser,
       removeUser,
     }
-  }, [authed, products, payments, users])
+  }, [authed, products, payments, users, backendError])
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>
 }
@@ -126,15 +292,4 @@ export function useAdmin() {
   const context = useContext(AdminContext)
   if (!context) throw new Error('useAdmin must be used inside AdminProvider')
   return context
-}
-
-export function formatPrice(price) {
-  return Number(price) === 0 ? 'FREE' : `$${Number(price).toFixed(2)}`
-}
-
-export function formatDate(value) {
-  if (!value) return '—'
-  const [year, month, day] = value.split('-')
-  const monthName = new Date(year, month - 1, day).toLocaleString('en', { month: 'short' })
-  return `${monthName} ${day}, ${year}`
 }
