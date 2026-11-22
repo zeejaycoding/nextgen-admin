@@ -2,162 +2,86 @@ import { useState } from 'react'
 import { useAdmin } from '../context/AdminContext'
 import { formatDate, formatPrice } from '../lib/format'
 
-const filters = ['All', 'Completed', 'Pending', 'Delayed', 'Refunded']
-const statuses = ['Pending', 'Delayed', 'Completed', 'Refunded']
-const methods = ['Manual', 'Card', 'Apple Pay', 'Free']
-
-const initialForm = {
-  customer: '',
-  product: '',
-  amount: '',
-  method: 'Manual',
-  status: 'Pending',
-  date: new Date().toISOString().slice(0, 10),
-}
+const filters = ['All', 'Completed', 'Refunded', 'Free']
 
 export default function Payments() {
-  const { payments, updatePayment, addPayment, removePayment } = useAdmin()
+  const { payments, paymentSync, syncPayments } = useAdmin()
   const [status, setStatus] = useState('All')
   const [query, setQuery] = useState('')
-  const [form, setForm] = useState(initialForm)
-  const [showForm, setShowForm] = useState(false)
-  const [error, setError] = useState('')
-  const [saved, setSaved] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState('')
 
-  const completed = payments.filter((item) => item.status === 'Completed')
-  const revenue = completed.reduce((sum, item) => sum + Number(item.amount), 0)
-  const pending = payments.filter((item) => item.status === 'Pending').length
-  const delayed = payments.filter((item) => item.status === 'Delayed').length
-  const refunded = payments.filter((item) => item.status === 'Refunded').length
+  const stripeOrders = payments.filter((item) => item.source === 'stripe')
+  const completed = stripeOrders.filter((item) => item.status === 'Completed')
+  const revenue = completed.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  const freeOrders = payments.filter((item) => item.method === 'Free')
+  const refunded = payments.filter((item) => item.status === 'Refunded')
 
-  const update = (field) => (event) => {
-    setForm((current) => ({ ...current, [field]: event.target.value }))
-    setError('')
-    setSaved('')
-  }
-
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-    if (!form.customer.trim()) return setError('Enter a customer name or email.')
-    if (!form.product.trim()) return setError('Enter a product or order description.')
-    if (form.amount === '' || Number(form.amount) < 0 || !Number.isFinite(Number(form.amount))) {
-      return setError('Enter a valid amount (0 for free).')
-    }
-
-    setSubmitting(true)
-    const message = await addPayment({
-      customer: form.customer.trim(),
-      product: form.product.trim(),
-      amount: Number(form.amount),
-      method: form.method,
-      status: form.status,
-      date: form.date,
-    })
-    setSubmitting(false)
-
-    if (message) {
-      setError(message)
-      return
-    }
-
-    setForm(initialForm)
-    setError('')
-    setSaved('Order added successfully.')
-  }
-
-  const handleDelete = (payment) => {
-    if (!window.confirm(`Delete order ${payment.id}?`)) return
-    removePayment(payment.id)
+  const handleSync = async () => {
+    setSyncing(true)
+    setSyncError('')
+    const message = await syncPayments()
+    setSyncing(false)
+    if (message) setSyncError(message)
   }
 
   const visible = payments.filter((item) => {
     const term = query.trim().toLowerCase()
-    const matchesStatus = status === 'All' || item.status === status
-    const matchesTerm = !term || `${item.id} ${item.customer} ${item.product} ${item.method}`.toLowerCase().includes(term)
+    const matchesStatus = status === 'All'
+      || (status === 'Free' ? item.method === 'Free' : item.status === status)
+    const matchesTerm = !term
+      || [
+        item.id,
+        item.customer,
+        item.product,
+        item.method,
+        item.stripePaymentIntentId,
+        item.stripeSessionId,
+      ].join(' ').toLowerCase().includes(term)
     return matchesStatus && matchesTerm
   })
+
+  const syncSummary = paymentSync?.stripeConfigured === false
+    ? 'Stripe is not configured on the backend. No paid records can be fetched.'
+    : paymentSync?.checked !== undefined
+      ? `Last Stripe check: ${paymentSync.checked} sessions · ${paymentSync.paid} paid · ${paymentSync.updated} updated`
+      : ''
 
   return (
     <div className="page-stack">
       <div className="stat-grid stat-grid--four">
         <div className="stat-card stat-card--green">
           <span className="stat-label">Revenue</span>
-          <strong className="stat-value">{formatPrice(revenue)}</strong>
-          <span className="stat-note">completed payments</span>
+          <strong className="stat-value">${revenue.toFixed(2)}</strong>
+          <span className="stat-note">completed Stripe payments</span>
         </div>
         <div className="stat-card stat-card--navy">
-          <span className="stat-label">Orders</span>
-          <strong className="stat-value">{payments.length}</strong>
-          <span className="stat-note">total transactions</span>
-        </div>
-        <div className="stat-card stat-card--amber">
-          <span className="stat-label">Awaiting</span>
-          <strong className="stat-value">{pending + delayed}</strong>
-          <span className="stat-note">{pending} pending · {delayed} delayed</span>
+          <span className="stat-label">Paid orders</span>
+          <strong className="stat-value">{stripeOrders.length}</strong>
+          <span className="stat-note">from Stripe Checkout</span>
         </div>
         <div className="stat-card stat-card--cyan">
+          <span className="stat-label">Free orders</span>
+          <strong className="stat-value">{freeOrders.length}</strong>
+          <span className="stat-note">no payment taken</span>
+        </div>
+        <div className="stat-card stat-card--amber">
           <span className="stat-label">Refunded</span>
-          <strong className="stat-value">{refunded}</strong>
-          <span className="stat-note">sent back</span>
+          <strong className="stat-value">{refunded.length}</strong>
+          <span className="stat-note">reported by Stripe</span>
         </div>
       </div>
-
-      {showForm && (
-        <div className="panel">
-          <div className="panel-head">
-            <div>
-              <h3>Add an order</h3>
-              <p>Record a manual payment or hold it as pending/delayed for later review.</p>
-            </div>
-          </div>
-          <form className="admin-form" onSubmit={handleSubmit} noValidate>
-            <label className="field">
-              <span>Customer</span>
-              <input type="text" value={form.customer} onChange={update('customer')} placeholder="Name or email" />
-            </label>
-            <label className="field">
-              <span>Product / description</span>
-              <input type="text" value={form.product} onChange={update('product')} placeholder="e.g. MW3 Phantom" />
-            </label>
-            <label className="field">
-              <span>Amount ($)</span>
-              <input type="number" min="0" step="0.01" value={form.amount} onChange={update('amount')} placeholder="0.00" />
-            </label>
-            <label className="field">
-              <span>Method</span>
-              <select value={form.method} onChange={update('method')}>
-                {methods.map((option) => <option key={option}>{option}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>Status</span>
-              <select value={form.status} onChange={update('status')}>
-                {statuses.map((option) => <option key={option}>{option}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>Date</span>
-              <input type="date" value={form.date} onChange={update('date')} />
-            </label>
-            <div className="form-actions">
-              {error && <p className="form-error" role="alert">{error}</p>}
-              {saved && <p className="form-success" role="status">{saved}</p>}
-              <button type="submit" className="btn btn-primary" disabled={submitting}>
-                {submitting ? 'Adding…' : 'Add order'}
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
 
       <div className="panel">
         <div className="panel-head">
           <div>
             <h3>Payment history</h3>
-            <p>Review orders, change their status, or delete records.</p>
-            {saved && <p className="form-success" role="status">{saved}</p>}
+            <p>
+              Paid rows are read from Stripe Checkout. Free orders are local records with a
+              $0 total. Nothing here can be entered or edited by hand.
+            </p>
+            {syncSummary && <p className="form-success" role="status">{syncSummary}</p>}
+            {syncError && <p className="form-error" role="alert">{syncError}</p>}
           </div>
           <div className="panel-tools">
             <label className="table-search">
@@ -169,12 +93,22 @@ export default function Payments() {
                 aria-label="Search payments"
               />
             </label>
-            <select className="filter-select" value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter by status">
+            <select
+              className="filter-select"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+              aria-label="Filter by status"
+            >
               {filters.map((option) => <option key={option}>{option}</option>)}
             </select>
-            {!showForm && (
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}>+ Add order</button>
-            )}
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? 'Checking Stripe…' : 'Sync with Stripe'}
+            </button>
           </div>
         </div>
 
@@ -186,10 +120,11 @@ export default function Payments() {
                 <th>Customer</th>
                 <th>Product</th>
                 <th>Method</th>
+                <th>Card</th>
                 <th>Amount</th>
                 <th>Date</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th>Source</th>
               </tr>
             </thead>
             <tbody>
@@ -199,31 +134,27 @@ export default function Payments() {
                   <td>{payment.customer}</td>
                   <td>{payment.product}</td>
                   <td>{payment.method}</td>
+                  <td>
+                    {payment.cardBrand && payment.cardLast4
+                      ? `${payment.cardBrand} •••• ${payment.cardLast4}`
+                      : '—'}
+                  </td>
                   <td>{formatPrice(payment.amount)}</td>
                   <td>{formatDate(payment.date)}</td>
                   <td>
-                    <select
-                      className={`status-select status--${payment.status.toLowerCase()}`}
-                      value={payment.status}
-                      onChange={(event) => updatePayment(payment.id, event.target.value)}
-                      aria-label={`Status for ${payment.id}`}
-                    >
-                      {statuses.map((option) => <option key={option}>{option}</option>)}
-                    </select>
+                    <span className={`status status--${String(payment.status).toLowerCase()}`}>
+                      {payment.status}
+                    </span>
                   </td>
-                  <td className="actions-cell">
-                    <button
-                      type="button"
-                      className="row-action row-action--danger"
-                      onClick={() => handleDelete(payment)}
-                    >
-                      Delete
-                    </button>
+                  <td>
+                    {payment.source === 'stripe'
+                      ? `Stripe ${String(payment.stripeSessionId || '').slice(0, 16)}…`
+                      : 'Free order'}
                   </td>
                 </tr>
               ))}
               {visible.length === 0 && (
-                <tr><td colSpan="8" className="empty-row">No payments match your filters.</td></tr>
+                <tr><td colSpan="9" className="empty-row">No Stripe payments or free orders yet.</td></tr>
               )}
             </tbody>
           </table>

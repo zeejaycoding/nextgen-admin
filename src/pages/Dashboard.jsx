@@ -6,14 +6,14 @@ export default function Dashboard() {
   const { products, payments, users } = useAdmin()
 
   const revenue = payments
-    .filter((item) => item.status === 'Completed')
-    .reduce((sum, item) => sum + Number(item.amount), 0)
+    .filter((item) => item.source === 'stripe' && item.status === 'Completed')
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0)
 
   const stats = [
     { label: 'Products', value: products.length, note: 'in catalogue', tone: 'cyan' },
-    { label: 'Revenue', value: formatPrice(revenue), note: 'completed payments', tone: 'green' },
+    { label: 'Revenue', value: `$${revenue.toFixed(2)}`, note: 'completed Stripe payments', tone: 'green' },
     { label: 'Users', value: users.length, note: 'registered', tone: 'navy' },
-    { label: 'Orders', value: payments.length, note: 'all payments', tone: 'amber' },
+    { label: 'Orders', value: payments.length, note: 'Stripe + free orders', tone: 'amber' },
   ]
 
   return (
@@ -39,7 +39,7 @@ export default function Dashboard() {
         <div className="panel-head">
           <div>
             <h3>Recent payments</h3>
-            <p>Latest transactions from the store.</p>
+            <p>Latest Stripe Checkout payments and free orders.</p>
           </div>
           <Link to="/admin/payments" className="btn btn-outline btn-sm">View all</Link>
         </div>
@@ -83,7 +83,7 @@ export default function Dashboard() {
           </Link>
           <Link to="/admin/payments" className="quick-card">
             <strong>Manage payments</strong>
-            <span>Review orders and update their status.</span>
+            <span>Review real Stripe records and free orders.</span>
           </Link>
           <Link to="/admin/users" className="quick-card">
             <strong>Manage users</strong>

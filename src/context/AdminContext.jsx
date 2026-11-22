@@ -29,19 +29,13 @@ function errorMessage(error) {
   return 'Unable to reach the server. Check that the backend is running.'
 }
 
-function mapPayments(items) {
-  return items.map((item) => ({
-    ...item,
-    method: item.method === 'PayPal' ? 'Apple Pay' : item.method,
-  }))
-}
-
 const AdminContext = createContext(null)
 
 export function AdminProvider({ children }) {
   const [authed, setAuthed] = useState(false)
   const [products, setProducts] = useState([])
   const [payments, setPayments] = useState([])
+  const [paymentSync, setPaymentSync] = useState(null)
   const [users, setUsers] = useState([])
   const [apiError, setApiError] = useState('')
   const [socketError, setSocketError] = useState('')
@@ -82,14 +76,16 @@ export function AdminProvider({ children }) {
         if (!active) return
         setApiError('')
         if (Array.isArray(data?.products)) setProducts(data.products)
-        if (Array.isArray(data?.payments)) setPayments(mapPayments(data.payments))
+        if (Array.isArray(data?.payments)) setPayments(data.payments)
         if (Array.isArray(data?.users)) setUsers(data.users)
+        setPaymentSync(data?.paymentSync || null)
       })
       .catch((error) => {
         /* Never show stale or local-only records as if they were live data. */
         if (!active) return
         setProducts([])
         setPayments([])
+        setPaymentSync(null)
         setUsers([])
         markApiError(error)
       })
@@ -100,7 +96,7 @@ export function AdminProvider({ children }) {
       'Real-time updates are unavailable. Changes may not appear until you refresh.',
     ))
     socket.on('products', (list) => Array.isArray(list) && setProducts(list))
-    socket.on('payments', (list) => Array.isArray(list) && setPayments(mapPayments(list)))
+    socket.on('payments', (list) => Array.isArray(list) && setPayments(list))
     socket.on('users', (list) => Array.isArray(list) && setUsers(list))
     socket.connect()
 
@@ -112,7 +108,16 @@ export function AdminProvider({ children }) {
 
   const value = useMemo(() => {
     const reloadProducts = async () => setProducts(await apiFetch('/products'))
-    const reloadPayments = async () => setPayments(mapPayments(await apiFetch('/admin/payments')))
+    const syncPayments = async () => {
+      try {
+        const data = await apiFetch('/admin/payments/sync', { method: 'POST' })
+        setPayments(Array.isArray(data?.payments) ? data.payments : [])
+        setPaymentSync(data)
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
     const reloadUsers = async () => setUsers(await apiFetch('/admin/users'))
 
     const login = async (email, password) => {
@@ -171,42 +176,6 @@ export function AdminProvider({ children }) {
       try {
         await apiFetch(`/products/${encodeURIComponent(id)}`, { method: 'DELETE' })
         await reloadProducts()
-        return null
-      } catch (error) {
-        return markApiError(error)
-      }
-    }
-
-    const updatePayment = async (id, status) => {
-      try {
-        await apiFetch(`/admin/payments/${encodeURIComponent(id)}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ status }),
-        })
-        await reloadPayments()
-        return null
-      } catch (error) {
-        return markApiError(error)
-      }
-    }
-
-    const addPayment = async (payment) => {
-      try {
-        await apiFetch('/admin/payments', {
-          method: 'POST',
-          body: JSON.stringify(payment),
-        })
-        await reloadPayments()
-        return null
-      } catch (error) {
-        return markApiError(error)
-      }
-    }
-
-    const removePayment = async (id) => {
-      try {
-        await apiFetch(`/admin/payments/${encodeURIComponent(id)}`, { method: 'DELETE' })
-        await reloadPayments()
         return null
       } catch (error) {
         return markApiError(error)
@@ -274,16 +243,15 @@ export function AdminProvider({ children }) {
       updateProduct,
       removeProduct,
       payments,
-      updatePayment,
-      addPayment,
-      removePayment,
+      paymentSync,
+      syncPayments,
       users,
       addUser,
       updateUser,
       toggleUser,
       removeUser,
     }
-  }, [authed, products, payments, users, backendError])
+  }, [authed, products, payments, paymentSync, users, backendError])
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>
 }
