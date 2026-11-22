@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { HashRouter } from 'react-router-dom'
 import App from './App'
 import Splash from './components/Splash'
 import { AdminProvider } from './context/AdminContext'
@@ -11,11 +11,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <SiteSettingsProvider>
       <Splash />
-      <BrowserRouter>
+      <HashRouter>
         <AdminProvider>
           <App />
         </AdminProvider>
-      </BrowserRouter>
+      </HashRouter>
     </SiteSettingsProvider>
   </React.StrictMode>,
 )
