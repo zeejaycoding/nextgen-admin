@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AdminLayout from './components/AdminLayout'
-import BackendNotice from './components/BackendNotice'
 import { useAdmin } from './context/AdminContext'
 import AdminLogin from './pages/AdminLogin'
 import Dashboard from './pages/Dashboard'
@@ -17,7 +16,6 @@ function Protected({ children }) {
 export default function App() {
   return (
     <>
-      <BackendNotice />
       <Routes>
         <Route path="/" element={<Navigate to="/admin/login" replace />} />
         <Route path="/admin/login" element={<AdminLogin />} />
