@@ -5,25 +5,15 @@ import { formatDate, formatPrice } from '../lib/format'
 const filters = ['All', 'Completed', 'Refunded', 'Free']
 
 export default function Payments() {
-  const { payments, paymentSync, syncPayments } = useAdmin()
+  const { payments } = useAdmin()
   const [status, setStatus] = useState('All')
   const [query, setQuery] = useState('')
-  const [syncing, setSyncing] = useState(false)
-  const [syncError, setSyncError] = useState('')
 
   const stripeOrders = payments.filter((item) => item.source === 'stripe')
   const completed = stripeOrders.filter((item) => item.status === 'Completed')
   const revenue = completed.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   const freeOrders = payments.filter((item) => item.method === 'Free')
   const refunded = payments.filter((item) => item.status === 'Refunded')
-
-  const handleSync = async () => {
-    setSyncing(true)
-    setSyncError('')
-    const message = await syncPayments()
-    setSyncing(false)
-    if (message) setSyncError(message)
-  }
 
   const visible = payments.filter((item) => {
     const term = query.trim().toLowerCase()
@@ -35,17 +25,11 @@ export default function Payments() {
         item.customer,
         item.product,
         item.method,
-        item.stripePaymentIntentId,
-        item.stripeSessionId,
+        item.cardBrand,
+        item.cardLast4,
       ].join(' ').toLowerCase().includes(term)
     return matchesStatus && matchesTerm
   })
-
-  const syncSummary = paymentSync?.stripeConfigured === false
-    ? 'Stripe is not configured on the backend. No paid records can be fetched.'
-    : paymentSync?.checked !== undefined
-      ? `Last Stripe check: ${paymentSync.checked} sessions · ${paymentSync.paid} paid · ${paymentSync.updated} updated`
-      : ''
 
   return (
     <div className="page-stack">
@@ -53,12 +37,12 @@ export default function Payments() {
         <div className="stat-card stat-card--green">
           <span className="stat-label">Revenue</span>
           <strong className="stat-value">${revenue.toFixed(2)}</strong>
-          <span className="stat-note">completed Stripe payments</span>
+          <span className="stat-note">completed payments</span>
         </div>
         <div className="stat-card stat-card--navy">
           <span className="stat-label">Paid orders</span>
           <strong className="stat-value">{stripeOrders.length}</strong>
-          <span className="stat-note">from Stripe Checkout</span>
+          <span className="stat-note">card payments</span>
         </div>
         <div className="stat-card stat-card--cyan">
           <span className="stat-label">Free orders</span>
@@ -76,12 +60,7 @@ export default function Payments() {
         <div className="panel-head">
           <div>
             <h3>Payment history</h3>
-            <p>
-              Paid rows are read from Stripe Checkout. Free orders are local records with a
-              $0 total. Nothing here can be entered or edited by hand.
-            </p>
-            {syncSummary && <p className="form-success" role="status">{syncSummary}</p>}
-            {syncError && <p className="form-error" role="alert">{syncError}</p>}
+            <p>Latest orders and payment records.</p>
           </div>
           <div className="panel-tools">
             <label className="table-search">
@@ -101,14 +80,6 @@ export default function Payments() {
             >
               {filters.map((option) => <option key={option}>{option}</option>)}
             </select>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={handleSync}
-              disabled={syncing}
-            >
-              {syncing ? 'Checking Stripe…' : 'Sync with Stripe'}
-            </button>
           </div>
         </div>
 
@@ -124,7 +95,6 @@ export default function Payments() {
                 <th>Amount</th>
                 <th>Date</th>
                 <th>Status</th>
-                <th>Source</th>
               </tr>
             </thead>
             <tbody>
@@ -146,15 +116,10 @@ export default function Payments() {
                       {payment.status}
                     </span>
                   </td>
-                  <td>
-                    {payment.source === 'stripe'
-                      ? `Stripe ${String(payment.stripeSessionId || '').slice(0, 16)}…`
-                      : 'Free order'}
-                  </td>
                 </tr>
               ))}
               {visible.length === 0 && (
-                <tr><td colSpan="9" className="empty-row">No Stripe payments or free orders yet.</td></tr>
+                <tr><td colSpan="8" className="empty-row">No payment records yet.</td></tr>
               )}
             </tbody>
           </table>
