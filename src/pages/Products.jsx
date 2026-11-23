@@ -6,10 +6,12 @@ const today = new Date().toISOString().slice(0, 10)
 
 const GAMES = ['MW19', 'CW', 'MW2', 'MW3', 'Bo6', 'Bo7', 'MW4', 'GTA VI']
 
+const CATEGORIES = ['Item', 'Golden', 'Lengendary', 'Rare', 'Money', 'Weapons']
+
 const initialForm = {
   title: '',
   game: 'MW3',
-  category: 'Mod',
+  category: 'Item',
   price: '',
   badge: '',
   contact: '',
@@ -149,7 +151,7 @@ export default function Products() {
     setForm({
       title: product.title || '',
       game: product.game || 'MW3',
-      category: product.category || 'Mod',
+      category: product.category || 'Item',
       price: product.badge === 'Free' ? 0 : (product.price ?? ''),
       badge: product.badge || '',
       contact: product.contact || '',
@@ -249,11 +251,8 @@ export default function Products() {
           <label className="field">
             <span>Category</span>
             <select value={form.category} onChange={update('category')}>
-              <option>Mod</option>
-              <option>Tool</option>
-              <option>Script</option>
-              <option>Menu</option>
-              <option>Other</option>
+              {CATEGORIES.map((category) => <option key={category}>{category}</option>)}
+              {!CATEGORIES.includes(form.category) && <option>{form.category}</option>}
             </select>
           </label>
 
