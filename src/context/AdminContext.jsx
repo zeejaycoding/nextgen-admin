@@ -32,7 +32,7 @@ function errorMessage(error) {
 const AdminContext = createContext(null)
 
 export function AdminProvider({ children }) {
-  const [authed, setAuthed] = useState(false)
+  const [authed, setAuthed] = useState(() => Boolean(getAdminToken()))
   const [products, setProducts] = useState([])
   const [payments, setPayments] = useState([])
   const [paymentSync, setPaymentSync] = useState(null)
@@ -45,6 +45,11 @@ export function AdminProvider({ children }) {
     if (!error?.status || error.status >= 500) setApiError(message)
     if (error?.status === 401) {
       clearAdminToken()
+      try {
+        localStorage.removeItem('nextgen-admin-auth')
+      } catch {
+        /* storage can be unavailable in private browsing */
+      }
       setAuthed(false)
       setApiError('Your session expired. Please sign in again.')
     }
@@ -53,15 +58,6 @@ export function AdminProvider({ children }) {
 
   const backendError = apiError || socketError
 
-  useEffect(() => {
-    /* Sessions never survive a reload — every visit starts at the login page. */
-    try {
-      localStorage.removeItem('nextgen-admin-auth')
-    } catch {
-      /* storage can be unavailable in private browsing */
-    }
-    clearAdminToken()
-  }, [])
   useEffect(() => save(KEYS.products, products), [products])
   useEffect(() => save(KEYS.payments, payments), [payments])
   useEffect(() => save(KEYS.users, users), [users])
@@ -133,6 +129,11 @@ export function AdminProvider({ children }) {
           body: JSON.stringify({ email: cleanEmail, password }),
         })
         setAdminToken(data.token)
+        try {
+          localStorage.setItem('nextgen-admin-auth', 'true')
+        } catch {
+          /* storage can be unavailable in private browsing */
+        }
       } catch (error) {
         return markApiError(error)
       }
@@ -143,6 +144,11 @@ export function AdminProvider({ children }) {
 
     const logout = () => {
       clearAdminToken()
+      try {
+        localStorage.removeItem('nextgen-admin-auth')
+      } catch {
+        /* storage can be unavailable in private browsing */
+      }
       setAuthed(false)
     }
 

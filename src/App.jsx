@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { useAutoUpdate } from './lib/useAutoUpdate'
 import AdminLayout from './components/AdminLayout'
 import { useAdmin } from './context/AdminContext'
 import AdminLogin from './pages/AdminLogin'
@@ -14,6 +15,8 @@ function Protected({ children }) {
 }
 
 export default function App() {
+  useAutoUpdate()
+
   return (
     <>
       <Routes>
