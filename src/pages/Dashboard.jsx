@@ -3,7 +3,7 @@ import { useAdmin } from '../context/AdminContext'
 import { formatDate, formatPrice } from '../lib/format'
 
 export default function Dashboard() {
-  const { products, payments, users } = useAdmin()
+  const { products, payments, users, tickets } = useAdmin()
 
   const revenue = payments
     .filter((item) => item.source === 'stripe' && item.status === 'Completed')
@@ -84,6 +84,10 @@ export default function Dashboard() {
           <Link to="/admin/payments" className="quick-card">
             <strong>Manage payments</strong>
             <span>Review real Stripe records and free orders.</span>
+          </Link>
+          <Link to="/admin/tickets" className="quick-card">
+            <strong>Answer tickets</strong>
+            <span>{tickets.filter((item) => item.status === 'Open').length} open member requests waiting.</span>
           </Link>
           <Link to="/admin/users" className="quick-card">
             <strong>Manage users</strong>

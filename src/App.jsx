@@ -7,11 +7,14 @@ import Dashboard from './pages/Dashboard'
 import Payments from './pages/Payments'
 import Products from './pages/Products'
 import Settings from './pages/Settings'
+import Tickets from './pages/Tickets'
 import Users from './pages/Users'
 
-function Protected({ children }) {
-  const { authed } = useAdmin()
-  return authed ? children : <Navigate to="/admin/login" replace />
+function Protected({ children, productsOnly = false }) {
+  const { authed, restricted } = useAdmin()
+  if (!authed) return <Navigate to="/admin/login" replace />
+  if (productsOnly && restricted) return <Navigate to="/admin/products" replace />
+  return children
 }
 
 export default function App() {
@@ -26,11 +29,12 @@ export default function App() {
           path="/admin"
           element={<Protected><AdminLayout /></Protected>}
         >
-          <Route index element={<Dashboard />} />
+          <Route index element={<Protected productsOnly><Dashboard /></Protected>} />
           <Route path="products" element={<Products />} />
-          <Route path="payments" element={<Payments />} />
-          <Route path="users" element={<Users />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="payments" element={<Protected productsOnly><Payments /></Protected>} />
+          <Route path="tickets" element={<Protected productsOnly><Tickets /></Protected>} />
+          <Route path="users" element={<Protected productsOnly><Users /></Protected>} />
+          <Route path="settings" element={<Protected productsOnly><Settings /></Protected>} />
         </Route>
         <Route path="*" element={<Navigate to="/admin/login" replace />} />
       </Routes>

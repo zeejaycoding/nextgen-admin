@@ -230,7 +230,10 @@ export default function Users() {
               {visible.map((user) => (
                 <tr key={user.id}>
                   <td><strong>{user.name}</strong></td>
-                  <td>{user.email}</td>
+                  <td>
+                    {user.email}
+                    {user.emailVerified === false && <span className="tag tag--pending">Unverified</span>}
+                  </td>
                   <td><span className={`tag${user.role === 'Admin' ? ' tag--admin' : ''}`}>{user.role}</span></td>
                   <td><span className={`status status--${user.status.toLowerCase()}`}>{user.status}</span></td>
                   <td>{formatDate(user.joined)}</td>

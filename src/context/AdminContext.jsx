@@ -11,10 +11,27 @@ const KEYS = {
   products: 'nextgen-admin-products',
   payments: 'nextgen-admin-payments',
   users: 'nextgen-admin-users',
+  tickets: 'nextgen-admin-tickets',
 }
 
-const ADMIN_EMAIL = 'admin@domigen.com'
-const ADMIN_PASSWORD = 'admin321'
+const ADMIN_IDENTITY_KEY = 'nextgen-admin-auth'
+
+function clearAdminIdentity() {
+  try {
+    localStorage.removeItem(ADMIN_IDENTITY_KEY)
+  } catch {
+    /* storage can be unavailable in private browsing */
+  }
+}
+
+function readAdminIdentity() {
+  try {
+    const value = JSON.parse(localStorage.getItem(ADMIN_IDENTITY_KEY) || 'null')
+    return value && typeof value === 'object' ? value : null
+  } catch {
+    return null
+  }
+}
 
 function save(key, value) {
   try {
@@ -33,10 +50,12 @@ const AdminContext = createContext(null)
 
 export function AdminProvider({ children }) {
   const [authed, setAuthed] = useState(() => Boolean(getAdminToken()))
+  const [admin, setAdmin] = useState(readAdminIdentity)
   const [products, setProducts] = useState([])
   const [payments, setPayments] = useState([])
   const [paymentSync, setPaymentSync] = useState(null)
   const [users, setUsers] = useState([])
+  const [tickets, setTickets] = useState([])
   const [apiError, setApiError] = useState('')
   const [socketError, setSocketError] = useState('')
 
@@ -45,11 +64,8 @@ export function AdminProvider({ children }) {
     if (!error?.status || error.status >= 500) setApiError(message)
     if (error?.status === 401) {
       clearAdminToken()
-      try {
-        localStorage.removeItem('nextgen-admin-auth')
-      } catch {
-        /* storage can be unavailable in private browsing */
-      }
+      clearAdminIdentity()
+      setAdmin(null)
       setAuthed(false)
       setApiError('Your session expired. Please sign in again.')
     }
@@ -61,6 +77,7 @@ export function AdminProvider({ children }) {
   useEffect(() => save(KEYS.products, products), [products])
   useEffect(() => save(KEYS.payments, payments), [payments])
   useEffect(() => save(KEYS.users, users), [users])
+  useEffect(() => save(KEYS.tickets, tickets), [tickets])
 
   useEffect(() => {
     if (!authed || !getAdminToken()) return undefined
@@ -74,6 +91,7 @@ export function AdminProvider({ children }) {
         if (Array.isArray(data?.products)) setProducts(data.products)
         if (Array.isArray(data?.payments)) setPayments(data.payments)
         if (Array.isArray(data?.users)) setUsers(data.users)
+        if (Array.isArray(data?.tickets)) setTickets(data.tickets)
         setPaymentSync(data?.paymentSync || null)
       })
       .catch((error) => {
@@ -83,6 +101,7 @@ export function AdminProvider({ children }) {
         setPayments([])
         setPaymentSync(null)
         setUsers([])
+        setTickets([])
         markApiError(error)
       })
 
@@ -94,6 +113,7 @@ export function AdminProvider({ children }) {
     socket.on('products', (list) => Array.isArray(list) && setProducts(list))
     socket.on('payments', (list) => Array.isArray(list) && setPayments(list))
     socket.on('users', (list) => Array.isArray(list) && setUsers(list))
+    socket.on('tickets', (list) => Array.isArray(list) && setTickets(list))
     socket.connect()
 
     return () => {
@@ -103,6 +123,7 @@ export function AdminProvider({ children }) {
   }, [authed])
 
   const value = useMemo(() => {
+    const restricted = admin?.scope === 'products'
     const reloadProducts = async () => setProducts(await apiFetch('/products'))
     const syncPayments = async () => {
       try {
@@ -115,40 +136,44 @@ export function AdminProvider({ children }) {
       }
     }
     const reloadUsers = async () => setUsers(await apiFetch('/admin/users'))
+    const reloadTickets = async () => setTickets(await apiFetch('/admin/tickets'))
 
     const login = async (email, password) => {
       const cleanEmail = String(email).trim()
-      if (cleanEmail !== ADMIN_EMAIL || String(password) !== ADMIN_PASSWORD) {
-        return 'Invalid email or password.'
-      }
+      if (!cleanEmail || !password) return 'Enter your email and password.'
 
+      let data
       try {
-        const data = await apiFetch('/admin/login', {
+        data = await apiFetch('/admin/login', {
           method: 'POST',
           token: '',
           body: JSON.stringify({ email: cleanEmail, password }),
         })
-        setAdminToken(data.token)
-        try {
-          localStorage.setItem('nextgen-admin-auth', 'true')
-        } catch {
-          /* storage can be unavailable in private browsing */
-        }
       } catch (error) {
+        // A rejected sign-in is shown on the form; it must not be treated as a
+        // session expiry or clear any unrelated local state.
+        if (error?.status === 401 || error?.status === 403) {
+          return error.message || 'Invalid email or password.'
+        }
         return markApiError(error)
       }
 
+      const account = data.admin || { email: cleanEmail }
+      setAdminToken(data.token)
+      setAdmin(account)
+      try {
+        localStorage.setItem(ADMIN_IDENTITY_KEY, JSON.stringify(account))
+      } catch {
+        /* storage can be unavailable in private browsing */
+      }
       setAuthed(true)
-      return null
+      return { redirectTo: account.scope === 'products' ? '/admin/products' : '/admin' }
     }
 
     const logout = () => {
       clearAdminToken()
-      try {
-        localStorage.removeItem('nextgen-admin-auth')
-      } catch {
-        /* storage can be unavailable in private browsing */
-      }
+      clearAdminIdentity()
+      setAdmin(null)
       setAuthed(false)
     }
 
@@ -239,8 +264,35 @@ export function AdminProvider({ children }) {
       }
     }
 
+    const respondTicket = async (id, changes) => {
+      try {
+        const updated = await apiFetch(`/admin/tickets/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(changes),
+        })
+        setTickets((current) => current.map((item) => (
+          String(item.id) === String(id) ? updated : item
+        )))
+        return { ok: true, ticket: updated }
+      } catch (error) {
+        return { ok: false, message: markApiError(error) }
+      }
+    }
+
+    const removeTicket = async (id) => {
+      try {
+        await apiFetch(`/admin/tickets/${encodeURIComponent(id)}`, { method: 'DELETE' })
+        setTickets((current) => current.filter((item) => String(item.id) !== String(id)))
+        return null
+      } catch (error) {
+        return markApiError(error)
+      }
+    }
+
     return {
       authed,
+      admin,
+      restricted,
       backendError,
       login,
       logout,
@@ -256,8 +308,12 @@ export function AdminProvider({ children }) {
       updateUser,
       toggleUser,
       removeUser,
+      tickets,
+      reloadTickets,
+      respondTicket,
+      removeTicket,
     }
-  }, [authed, products, payments, paymentSync, users, backendError])
+  }, [authed, admin, products, payments, paymentSync, users, tickets, backendError])
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>
 }

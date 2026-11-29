@@ -21,6 +21,11 @@ const navItems = [
     icon: 'M2 6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6Zm2 3v2h16V9H4Zm0 5v3h5v-3H4Z',
   },
   {
+    to: '/admin/tickets',
+    label: 'Tickets',
+    icon: 'M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4V5a2 2 0 0 1 2-2Zm3 5h10v2H7V8Zm0 4h7v2H7v-2Z',
+  },
+  {
     to: '/admin/users',
     label: 'Users',
     icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5Z',
@@ -35,17 +40,22 @@ const navItems = [
 function titleFor(pathname) {
   if (pathname.startsWith('/admin/products')) return 'Products'
   if (pathname.startsWith('/admin/payments')) return 'Payments'
+  if (pathname.startsWith('/admin/tickets')) return 'Tickets'
   if (pathname.startsWith('/admin/users')) return 'Users'
   if (pathname.startsWith('/admin/settings')) return 'Settings'
   return 'Dashboard'
 }
 
 export default function AdminLayout() {
-  const { logout } = useAdmin()
+  const { admin, restricted, logout } = useAdmin()
   const { name } = useSiteSettings()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const mobileNavItems = navItems.filter((item) => item.to !== '/admin/settings')
+  const visibleNavItems = restricted
+    ? navItems.filter((item) => item.to === '/admin/products')
+    : navItems
+  const mobileNavItems = visibleNavItems.filter((item) => item.to !== '/admin/settings')
+  const homeTo = restricted ? '/admin/products' : '/admin'
 
   const handleLogout = () => {
     logout()
@@ -61,7 +71,7 @@ export default function AdminLayout() {
 
         <nav className="sidebar-nav" aria-label="Admin navigation">
           <span className="sidebar-label">Menu</span>
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -88,7 +98,7 @@ export default function AdminLayout() {
       <div className="admin-main">
         <header className="admin-topbar">
           <div className="mobile-topbar">
-            <Link to="/admin" className="mobile-brand" aria-label={`${name} admin home`}>
+            <Link to={homeTo} className="mobile-brand" aria-label={`${name} admin home`}>
               <Logo size={34} withText={false} />
               <span>{name.toUpperCase()} <b>ADMIN</b></span>
             </Link>
@@ -108,8 +118,8 @@ export default function AdminLayout() {
           <div className="topbar-user">
             <span className="avatar">AD</span>
             <div>
-              <strong>Admin</strong>
-              <span>admin@domigen.com</span>
+              <strong>{admin?.name || 'Admin'}</strong>
+              <span>{admin?.email || 'admin@domigen.com'}</span>
             </div>
           </div>
         </header>

@@ -752,6 +752,12 @@ h3 {
   color: var(--cyan-dark);
 }
 
+.tag--pending {
+  margin-left: 8px;
+  background: #fff3d6;
+  color: #8a5a00;
+}
+
 .status--completed,
 .status--active {
   background: #e6f7ee;
@@ -765,9 +771,32 @@ h3 {
   color: #966500;
 }
 
-.status--refunded {
+.status--refunded,
+.status--closed {
   background: #edf1f3;
   color: #63757d;
+}
+
+.status--open {
+  background: #e6f7ee;
+  color: #1f7a4d;
+}
+
+.status--in-progress {
+  background: #fff2d9;
+  color: #966500;
+}
+
+.ticket-detail-message {
+  margin: 0 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 .status-select {

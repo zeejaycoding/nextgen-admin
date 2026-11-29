@@ -5,7 +5,7 @@ import { useAdmin } from '../context/AdminContext'
 import { useSiteSettings } from '../context/SiteSettingsContext'
 
 export default function AdminLogin() {
-  const { authed, login } = useAdmin()
+  const { authed, restricted, login } = useAdmin()
   const { name } = useSiteSettings()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -13,18 +13,18 @@ export default function AdminLogin() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  if (authed) return <Navigate to="/admin" replace />
+  if (authed) return <Navigate to={restricted ? '/admin/products' : '/admin'} replace />
 
   const handleSubmit = async (event) => {
     event.preventDefault()
     setSubmitting(true)
-    const message = await login(email, password)
+    const result = await login(email, password)
     setSubmitting(false)
-    if (message) {
-      setError(message)
+    if (typeof result === 'string') {
+      setError(result)
       return
     }
-    navigate('/admin', { replace: true })
+    navigate(result.redirectTo, { replace: true })
   }
 
   return (
